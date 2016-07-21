@@ -1,10 +1,18 @@
+{-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Reflex.Dom.Sui.Dropdown
   ( uiDropdown
   , uiDropdownStatic
   , uiDropdownMap
   ) where
 
-import Reflex.Dom
+import           Data.Map (Map)
+import qualified Data.Map as Map
+import           Data.Maybe (fromMaybe)
+import           Reflex.Dom
+
+import           Reflex.Dom.Sui.Icon
 
 -- | Dropdown from dynamic list and a label function with an initial value.
 --
