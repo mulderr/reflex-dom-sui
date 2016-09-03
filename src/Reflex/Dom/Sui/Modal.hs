@@ -4,7 +4,9 @@
 
 module Reflex.Dom.Sui.Modal
   ( ModalConfig (..)
+  , Modal (..)
   , uiModal
+  , uiRemovingModal
   , mkUiModalBody
   , mkUiModalHeader
   , mkUiModalFooter
@@ -17,7 +19,7 @@ import           Data.Default
 import           Data.Either (isRight)
 import           Data.Map (Map)
 import qualified Data.Map as Map
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, isJust)
 import           Data.Monoid ((<>))
 import qualified Data.Text as T
 import           GHCJS.DOM (currentDocument, currentWindow)
@@ -33,6 +35,8 @@ import           GHCJS.DOM.Types (IsEvent, IsGObject, EventTarget)
 import           GHCJS.DOM.Window (getComputedStyle, getInnerWidth)
 import           Reflex
 import           Reflex.Dom
+import           Reflex.Contrib.Utils (extractEvent)
+import           Reflex.Dom.Contrib.Utils (widgetHoldHelper)
 import           Text.Read (readMaybe)
 
 import           Reflex.Dom.Sui.Button
@@ -55,24 +59,31 @@ instance Default ModalConfig where
                     , _modalConfig_bodyOpenClasses = ["dimmable", "dimmed", "scrolling"]
                     }
 
+data Modal t a
+  = Modal { _modal_close :: Event t ()
+          , _modal_result :: a
+          }
+
 ------------------------------------------------------------------------------
 -- | Modal using semantic-ui css.
+--
+-- Modified from Reflex.Dom.Contrib.Widgets.Modal
+
 uiModal
-  :: forall t m a . MonadWidget t m
+  :: MonadWidget t m
   => ModalConfig
   -> Event t Bool
   -- ^ Event to open and/or close the modal
   -> m (a, Event t ())
   -- ^ Widget rendering the body of the modal. Returns an event with a
   -- success value and an event triggering the close of the modal.
-  -> m a
+  -> m (Modal t a)
 uiModal cfg@(ModalConfig attrs dimmerAttrs dimmerClose escClose bodyCls) showm body = do
     rec let visE = leftmost [showm, False <$ closem]
         modalHacks cfg visE
         (resE, closem) <- go =<< holdDyn False visE
-    return resE
+    return $ Modal closem resE
   where
-    go :: Dynamic t Bool -> m (a, Event t ())
     go vis = do
         mattrs <- mapDyn (\b -> attrs <&> visibility b <> "tabindex" =: "-1") vis
         dattrs <- mapDyn (\b -> dimmerAttrs <&> visibility b) vis
@@ -80,11 +91,46 @@ uiModal cfg@(ModalConfig attrs dimmerAttrs dimmerClose escClose bodyCls) showm b
             elDynAttr' "div" mattrs body
         setFocus modal $ ffilter (==True) $ updated vis
         setScrollTop dimmer 0 $ ffilter (==True) $ updated vis
-        dimmerEvent <- doDimmer dimmerClose dimmer
-        return (res, close <> dimmerEvent <> doEsc escClose dimmer)
+        dimmerClick <- doDimmer dimmerClose dimmer
+        return (res, close <> dimmerClick <> doEsc escClose dimmer)
 
     visibility True = "class" =: "visible active" <> "style" =: "outline: none;"
     visibility False = mempty
+
+    doDimmer True e = domEventOwn Click e
+    doDimmer False _ = return never
+
+    doEsc True = fmap (const ()) . ffilter (== 27) . domEvent Keydown
+    doEsc False = const never
+
+uiRemovingModal
+  :: MonadWidget t m
+  => ModalConfig
+  -> Event t a
+  -> (a -> m (b, Event t ()))
+  -> m (Dynamic t (Maybe b))
+uiRemovingModal cfg@(ModalConfig attrs dimmerAttrs dimmerClose escClose bodyCls) showm body = do
+  rec let visE = leftmost [Just <$> showm, Nothing <$ closem]
+      (r, closem) <- do
+        res <- widgetHoldHelper domRemover Nothing visE
+        r <- mapDyn fst res
+        e <- extractEvent snd res
+        return (r, e)
+  modalHacks cfg $ isJust <$> visE
+  return r
+
+  where
+    domRemover Nothing = return (Nothing, never)
+    domRemover (Just a) = do
+      pb <- getPostBuild
+      (dimmer, (modal, (res, closem))) <- elAttr' "div" (dimmerAttrs <&> ("class" =: "visible active")) $ 
+        elAttr' "div" (attrs <&> ("class" =: "visible active" <> "style" =: "outline: none;" <> "tabindex" =: "-1")) $ do
+          (r, closem) <- body a
+          return (Just r, closem)
+      setFocus modal pb
+      setScrollTop dimmer 0 pb
+      dimmerClick <- doDimmer dimmerClose dimmer
+      return (res, closem <> dimmerClick <> doEsc escClose dimmer)
 
     doDimmer True e = domEventOwn Click e
     doDimmer False _ = return never
@@ -100,12 +146,11 @@ x <&> y = Map.unionWith (\a b -> a <> " " <> b) x y
 
 ------------------------------------------------------------------------------
 modalHacks :: MonadWidget t m => ModalConfig -> Event t Bool -> m ()
-modalHacks cfg = performEvent_ . fmap toggle
+modalHacks cfg e = performEvent_ $ fmap runHacks e
   where
+    runHacks True = jsOpen cs
+    runHacks False = jsClose cs
     cs = _modalConfig_bodyOpenClasses cfg
-
-    toggle True = jsOpen cs
-    toggle False = jsClose cs
 
 jsOpen :: MonadIO m => [String] -> m ()
 jsOpen cl = withDocBody $ \doc body -> do
@@ -191,7 +236,7 @@ domEventOwn en e =
 
 setFocus :: (MonadWidget t m) => El t -> Event t a -> m ()
 setFocus e ev = do
-  dev <- delay 0.001 ev
+  dev <- delay 0.01 ev
   performEvent_ $ (E.focus $ _el_element e) <$ dev
 
 setScrollTop :: (MonadWidget t m) => El t -> Int -> Event t a -> m ()
