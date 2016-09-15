@@ -1,8 +1,12 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Reflex.Dom.Sui.Icon
   ( icon
   ) where
 
-import Reflex.Dom
+import           Data.Text (Text)
+import qualified Data.Text as T
+import           Reflex.Dom
 
-icon :: MonadWidget t m => String -> m ()
-icon i = elClass "i" (unwords [i, "icon"]) blank
+icon :: DomBuilder t m => Text -> m ()
+icon i = elClass "i" (T.unwords [i, "icon"]) blank

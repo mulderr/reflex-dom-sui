@@ -1,4 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -21,6 +24,7 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe, isJust)
 import           Data.Monoid ((<>))
+import           Data.Text (Text)
 import qualified Data.Text as T
 import           GHCJS.DOM (currentDocument, currentWindow)
 import           GHCJS.DOM.CSSStyleDeclaration (getPropertyValue, setProperty)
@@ -44,11 +48,11 @@ import           Reflex.Dom.Sui.Icon
 
 
 data ModalConfig
-  = ModalConfig { _modalConfig_attributes :: Map String String
-                , _modalConfig_dimmerAttrs :: Map String String
+  = ModalConfig { _modalConfig_attributes :: Map Text Text
+                , _modalConfig_dimmerAttrs :: Map Text Text
                 , _modalConfig_dimmerClose :: Bool
                 , _modalConfig_escClose :: Bool
-                , _modalConfig_bodyOpenClasses :: [String]
+                , _modalConfig_bodyOpenClasses :: [Text]
                 }
 
 instance Default ModalConfig where
@@ -140,7 +144,7 @@ uiRemovingModal cfg@(ModalConfig attrs dimmerAttrs dimmerClose escClose bodyCls)
 
 infixr 6 <&>
 
-(<&>) :: Map String String -> Map String String -> Map String String
+(<&>) :: Map Text Text -> Map Text Text -> Map Text Text
 x <&> y = Map.unionWith (\a b -> a <> " " <> b) x y
 {-# INLINE (<&>) #-}
 
@@ -148,8 +152,8 @@ x <&> y = Map.unionWith (\a b -> a <> " " <> b) x y
 modalHacks :: MonadWidget t m => ModalConfig -> Event t Bool -> m ()
 modalHacks cfg e = performEvent_ $ fmap runHacks e
   where
-    runHacks True = jsOpen cs
-    runHacks False = jsClose cs
+    runHacks True = jsOpen $ map T.unpack cs
+    runHacks False = jsClose $ map T.unpack cs
     cs = _modalConfig_bodyOpenClasses cfg
 
 jsOpen :: MonadIO m => [String] -> m ()
@@ -173,7 +177,7 @@ jsFixPadding e f = do
   Just ops <- css e "padding-right"
   let op = fromMaybe 0 $ readMaybe $ T.unpack $ T.dropEnd 2 (T.pack ops)
   Just s <- E.getStyle e
-  setProperty s "padding-right" (Just $ show (op `f` scw) <> "px") ""
+  setProperty s ("padding-right" :: String) (Just $ show (op `f` scw) <> ("px" :: String)) ("" :: String)
 
 ------------------------------------------------------------------------------
 -- Semantic-ui templates.
@@ -197,13 +201,13 @@ mkUiModalBody header footer body = do
   return (resE1, closem1)
 
 -- | Template for a basic modal header with a given title.
-mkUiModalHeader :: MonadWidget t m => String -> m (Event t ())
+mkUiModalHeader :: MonadWidget t m => Text -> m (Event t ())
 mkUiModalHeader title = do
   divClass "header" $ text title
   return $ never
 
 -- | Template for a basic footer with submit and cancel buttons.
-mkUiModalFooter :: MonadWidget t m => String -> String -> Dynamic t (Either e a) -> m (Event t (), Event t ())
+mkUiModalFooter :: MonadWidget t m => Text -> Text -> Dynamic t (Either e a) -> m (Event t (), Event t ())
 mkUiModalFooter submitText cancelText _ = divClass "actions" $ do
   cancelE <- uiButton "ui black deny button" $ text cancelText
   text " "
@@ -277,14 +281,14 @@ css e prop = do
 -- This is ugly. Ideally the browser would somehow expose scrollbar width.
 measureScrollbar :: MonadIO m => m Double
 measureScrollbar = withDocBody $ \doc body -> do
-  Just scrollDiv <- createElement doc (Just "div")
-  E.setAttribute scrollDiv "style" measureStyle
+  Just scrollDiv <- createElement doc (Just ("div" :: String))
+  E.setAttribute scrollDiv ("style" :: String) measureStyle
   appendChild body (Just scrollDiv)
   w <- liftM2 (-) (E.getOffsetWidth scrollDiv) (E.getClientWidth scrollDiv)
   removeChild body (Just scrollDiv)
   return w
   where
-    measureStyle = "position: absolute; top: -9999px; width: 50px; height: 50px; overflow: scroll;"
+    measureStyle = "position: absolute; top: -9999px; width: 50px; height: 50px; overflow: scroll;" :: String
 
 -- document.body.clientWidth < window.innerWidth
 isBodyOverflowing :: MonadIO m => m Bool
