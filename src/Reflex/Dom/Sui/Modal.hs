@@ -89,8 +89,8 @@ uiModal cfg@(ModalConfig attrs dimmerAttrs dimmerClose escClose bodyCls) showm b
     return $ Modal closem resE
   where
     go vis = do
-        mattrs <- mapDyn (\b -> attrs <&> visibility b <> "tabindex" =: "-1") vis
-        dattrs <- mapDyn (\b -> dimmerAttrs <&> visibility b) vis
+        let mattrs = fmap (\b -> attrs <&> visibility b <> "tabindex" =: "-1") vis
+            dattrs = fmap (\b -> dimmerAttrs <&> visibility b) vis
         (dimmer, (modal, (res, close))) <- elDynAttr' "div" dattrs $
             elDynAttr' "div" mattrs body
         setFocus modal $ ffilter (==True) $ updated vis
@@ -117,9 +117,8 @@ uiRemovingModal cfg@(ModalConfig attrs dimmerAttrs dimmerClose escClose bodyCls)
   rec let visE = leftmost [Just <$> showm, Nothing <$ closem]
       (r, closem) <- do
         res <- widgetHoldHelper domRemover Nothing visE
-        r <- mapDyn fst res
         e <- extractEvent snd res
-        return (r, e)
+        return (fmap fst res, e)
   modalHacks cfg $ isJust <$> visE
   return r
 
@@ -195,8 +194,8 @@ mkUiModalBody header footer body = do
   dismiss <- header 
   bodyRes <- divClass "content" body
   (cancel, ok) <- footer bodyRes
-  let resE1 = tagDyn bodyRes ok
-  let closem1 = leftmost
+  let resE1 = tagPromptlyDyn bodyRes ok
+      closem1 = leftmost
         [dismiss, cancel, () <$ ffilter isRight resE1]
   return (resE1, closem1)
 
@@ -234,19 +233,19 @@ domEventOwn :: (MonadWidget t m, IsEvent (EventType en)) => EventName en -> El t
 domEventOwn en e =
   fmapMaybe tfilter <$> wrapDomEvent el (onEventName en) (eventWithTarget el en)
   where
-    el = _el_element e
+    el = _element_raw e
     tfilter (Just (t, r)) = bool Nothing (Just r) (t == el)
     tfilter _ = Nothing
 
 setFocus :: (MonadWidget t m) => El t -> Event t a -> m ()
 setFocus e ev = do
   dev <- delay 0.01 ev
-  performEvent_ $ (E.focus $ _el_element e) <$ dev
+  performEvent_ $ (E.focus $ _element_raw e) <$ dev
 
 setScrollTop :: (MonadWidget t m) => El t -> Int -> Event t a -> m ()
 setScrollTop e v ev = do
   dev <- delay 0.01 ev
-  performEvent_ $ (E.setScrollTop (_el_element e) v) <$ dev
+  performEvent_ $ (E.setScrollTop (_element_raw e) v) <$ dev
 
 ------------------------------------------------------------------------------
 

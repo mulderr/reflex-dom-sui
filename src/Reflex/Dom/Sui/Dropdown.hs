@@ -98,11 +98,10 @@ uiDropdownMap
     -> m (Event t k)
 uiDropdownMap klass i initKey items = do
     divClass klass $ do
-      rec divClass "text" $ dynText =<< combineDyn (\k -> fromMaybe "" . Map.lookup k) selectedKey items
+      rec divClass "text" $ dynText $ zipDynWith (\k -> fromMaybe "" . Map.lookup k) selectedKey items
           icon i
           res <- divClass "menu" $ listWithKey items $ \k dv -> item k dv
-          dev <- mapDyn (leftmost . Map.elems) res
-          let ev = switch $ current dev
+          let ev = switch $ current $ fmap (leftmost . Map.elems) res
           selectedKey <- holdDyn initKey ev
       return ev
   where
