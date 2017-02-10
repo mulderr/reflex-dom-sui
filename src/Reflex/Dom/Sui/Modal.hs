@@ -39,8 +39,6 @@ import           GHCJS.DOM.Types (IsEvent, IsGObject, EventTarget)
 import           GHCJS.DOM.Window (getComputedStyle, getInnerWidth)
 import           Reflex
 import           Reflex.Dom
-import           Reflex.Contrib.Utils (extractEvent)
-import           Reflex.Dom.Contrib.Utils (widgetHoldHelper)
 import           Text.Read (readMaybe)
 
 import           Reflex.Dom.Sui.Button
@@ -116,17 +114,17 @@ uiRemovingModal
 uiRemovingModal cfg@(ModalConfig attrs dimmerAttrs dimmerClose escClose bodyCls) showm body = do
   rec let visE = leftmost [Just <$> showm, Nothing <$ closem]
       (r, closem) <- do
-        res <- widgetHoldHelper domRemover Nothing visE
-        e <- extractEvent snd res
+        res <- widgetHold (domRemover Nothing) (fmap domRemover visE)
+        let e = switch $ current $ fmap snd res
         return (fmap fst res, e)
-  modalHacks cfg $ isJust <$> visE
+  modalHacks cfg $ fmap isJust visE
   return r
 
   where
     domRemover Nothing = return (Nothing, never)
     domRemover (Just a) = do
       pb <- getPostBuild
-      (dimmer, (modal, (res, closem))) <- elAttr' "div" (dimmerAttrs <&> ("class" =: "visible active")) $ 
+      (dimmer, (modal, (res, closem))) <- elAttr' "div" (dimmerAttrs <&> ("class" =: "visible active")) $
         elAttr' "div" (attrs <&> ("class" =: "visible active" <> "style" =: "outline: none;" <> "tabindex" =: "-1")) $ do
           (r, closem) <- body a
           return (Just r, closem)
@@ -191,7 +189,7 @@ mkUiModalBody
   -> m (Dynamic t (Either e a))
   -> m (Event t (Either e a), Event t ())
 mkUiModalBody header footer body = do
-  dismiss <- header 
+  dismiss <- header
   bodyRes <- divClass "content" body
   (cancel, ok) <- footer bodyRes
   let resE1 = tagPromptlyDyn bodyRes ok

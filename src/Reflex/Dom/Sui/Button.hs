@@ -12,11 +12,9 @@ import Data.Monoid
 import Data.Text (Text)
 import Reflex.Dom
 
--- TODO: remove MonadWidget
 uiButton :: MonadWidget t m => Text -> m () -> m (Event t ())
 uiButton klass child = snd <$> uiButton' klass child
 
--- TODO: remove MonadWidget
 uiButton' :: MonadWidget t m => Text -> m () -> m (El t, Event t ())
 uiButton' klass child = do
   (e, _) <- elAttr' "button" ("class" =: klass <> "type" =: "button") child
