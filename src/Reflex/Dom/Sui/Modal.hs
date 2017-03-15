@@ -189,13 +189,12 @@ mkUiModalBody
   -> m (Dynamic t (Either e a))
   -> m (Event t (Either e a), Event t ())
 mkUiModalBody header footer body = do
-  dismiss <- header
+  dismissE <- header
   bodyRes <- divClass "content" body
-  (cancel, ok) <- footer bodyRes
-  let resE1 = tagPromptlyDyn bodyRes ok
-      closem1 = leftmost
-        [dismiss, cancel, () <$ ffilter isRight resE1]
-  return (resE1, closem1)
+  (submitE, cancelE) <- footer bodyRes
+  let resE = tagPromptlyDyn bodyRes submitE
+      closem = leftmost [dismissE, cancelE, () <$ ffilter isRight resE]
+  return (resE, closem)
 
 -- | Template for a basic modal header with a given title.
 mkUiModalHeader :: MonadWidget t m => Text -> m (Event t ())
