@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -222,7 +223,12 @@ eventWithTarget :: (DOM.IsEvent (EventType en), E.IsElement e, DOM.IsGObject t)
   -> EventName en
   -> EventM e (EventType en) (Maybe (t, (EventResultType en)))
 eventWithTarget e en = do
+-- TODO: is this really necessary?
+#ifdef ghcjs_HOST_OS
+  Just t <- target
+#else
   t <- target
+#endif
   mr <- fmap unEventResult <$> defaultDomEventHandler e en
   return $ (,) <$> Just t <*> mr
 
