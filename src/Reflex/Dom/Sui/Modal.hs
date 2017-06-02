@@ -31,8 +31,9 @@ import           GHCJS.DOM (currentDocument, currentWindow)
 import           GHCJS.DOM.CSSStyleDeclaration (getPropertyValue, setProperty)
 import           GHCJS.DOM.Document (Document, createElement, getBody)
 import qualified GHCJS.DOM.DOMTokenList as TL
-import           GHCJS.DOM.HTMLElement (HTMLElement, focus)
-import qualified GHCJS.DOM.Element as E
+import qualified GHCJS.DOM.Element as DOM
+import qualified GHCJS.DOM.ElementCSSInlineStyle as DOM
+import qualified GHCJS.DOM.HTMLElement as DOM
 import qualified GHCJS.DOM.Event as Event
 import           GHCJS.DOM.EventM (EventM, target)
 import           GHCJS.DOM.Node (appendChild, removeChild, isSameNode)
@@ -170,12 +171,12 @@ jsClose cl = withDocBody $ \doc body -> do
   isOverflowing <- isBodyOverflowing
   when isOverflowing $ jsFixPadding body (-)
 
-jsFixPadding :: MonadJSM m => HTMLElement -> (Double -> Double -> Double) -> m ()
+jsFixPadding :: MonadJSM m => DOM.HTMLElement -> (Double -> Double -> Double) -> m ()
 jsFixPadding e f = do
   scw <- measureScrollbar
   ops <- css e "padding-right"
   let op = fromMaybe 0 $ readMaybe $ T.unpack $ T.dropEnd 2 (T.pack ops)
-  s <- E.getStyle e
+  s <- DOM.getStyle e
   setProperty s ("padding-right" :: String) (Just $ show (op `f` scw) <> ("px" :: String)) (Nothing :: Maybe String)
 
 ------------------------------------------------------------------------------
@@ -218,7 +219,7 @@ mkUiModalFooter submitText cancelText _ = divClass "actions" $ do
 -- Low-level helpers.
 
 -- | Wraps 'defaultDomEventHandler' adding event target.
-eventWithTarget :: (DOM.IsEvent (EventType en), E.IsElement e, DOM.IsGObject t)
+eventWithTarget :: (DOM.IsEvent (EventType en), DOM.IsElement e, DOM.IsGObject t)
   => e
   -> EventName en
   -> EventM e (EventType en) (Maybe (t, (EventResultType en)))
@@ -247,29 +248,29 @@ domEventOwn en e = do
 setFocus :: (MonadWidget t m) => El t -> Event t a -> m ()
 setFocus e ev = do
   dev <- delay 0.01 ev
-  performEvent_ $ (focus $ DOM.uncheckedCastTo DOM.HTMLElement $ _element_raw e) <$ dev
+  performEvent_ $ (DOM.focus $ DOM.uncheckedCastTo DOM.HTMLElement $ _element_raw e) <$ dev
 
 setScrollTop :: (MonadWidget t m) => El t -> Int -> Event t a -> m ()
 setScrollTop e v ev = do
   dev <- delay 0.01 ev
-  performEvent_ $ (E.setScrollTop (_element_raw e) v) <$ dev
+  performEvent_ $ (DOM.setScrollTop (_element_raw e) v) <$ dev
 
 ------------------------------------------------------------------------------
 
 -- | Add css class to element.
-addClass :: (MonadJSM m, E.IsElement self) => self -> String -> m ()
+addClass :: (MonadJSM m, DOM.IsElement self) => self -> String -> m ()
 addClass el klass = withCL el $ \cl -> TL.add cl [klass]
 
 -- | Remove css class from element.
-removeClass :: (MonadJSM m, E.IsElement self) => self -> String -> m ()
+removeClass :: (MonadJSM m, DOM.IsElement self) => self -> String -> m ()
 removeClass el klass = withCL el $ \cl -> TL.remove cl [klass]
 
 -- | Do stuff to element's class list.
-withCL :: (MonadJSM m, E.IsElement self) => self -> (TL.DOMTokenList -> m ()) -> m ()
-withCL el f = E.getClassList el >>= f
+withCL :: (MonadJSM m, DOM.IsElement self) => self -> (TL.DOMTokenList -> m ()) -> m ()
+withCL el f = DOM.getClassList el >>= f
 
 -- | Do stuff with document and body.
-withDocBody :: (MonadJSM m) => (Document -> HTMLElement -> m a) -> m a
+withDocBody :: (MonadJSM m) => (Document -> DOM.HTMLElement -> m a) -> m a
 withDocBody f = do
   Just doc <- currentDocument
   Just body <- getBody doc
@@ -277,7 +278,7 @@ withDocBody f = do
 
 -- | Gets the computed style.
 -- window.getComputedStyle(elem, null).getPropertyValue(prop)
-css :: (MonadJSM m) => HTMLElement -> String -> m String
+css :: (MonadJSM m) => DOM.HTMLElement -> String -> m String
 css e prop = do
   Just w <- currentWindow
   s <- getComputedStyle w e (Nothing :: Maybe String)
@@ -288,9 +289,9 @@ css e prop = do
 measureScrollbar :: MonadJSM m => m Double
 measureScrollbar = withDocBody $ \doc body -> do
   scrollDiv <- createElement doc ("div" :: String)
-  E.setAttribute scrollDiv ("style" :: String) measureStyle
+  DOM.setAttribute scrollDiv ("style" :: String) measureStyle
   appendChild body scrollDiv
-  w <- liftM2 (-) (E.getOffsetWidth scrollDiv) (E.getClientWidth scrollDiv)
+  w <- liftM2 (-) (DOM.getOffsetWidth $ DOM.uncheckedCastTo DOM.HTMLElement scrollDiv) (DOM.getClientWidth scrollDiv)
   removeChild body scrollDiv
   return w
   where
@@ -300,4 +301,4 @@ measureScrollbar = withDocBody $ \doc body -> do
 isBodyOverflowing :: MonadJSM m => m Bool
 isBodyOverflowing = withDocBody $ \_ body -> do
   Just w <- currentWindow
-  liftM2 (<) (E.getClientWidth body) (fromIntegral <$> getInnerWidth w)
+  liftM2 (<) (DOM.getClientWidth body) (fromIntegral <$> getInnerWidth w)
