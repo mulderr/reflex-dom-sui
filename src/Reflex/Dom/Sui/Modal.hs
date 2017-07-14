@@ -177,7 +177,7 @@ jsFixPadding e f = do
   ops <- css e "padding-right"
   let op = fromMaybe 0 $ readMaybe $ T.unpack $ T.dropEnd 2 (T.pack ops)
   s <- DOM.getStyle e
-  setProperty s ("padding-right" :: String) (Just $ show (op `f` scw) <> ("px" :: String)) (Nothing :: Maybe String)
+  setProperty s ("padding-right" :: String) (show (op `f` scw) <> ("px" :: String)) (Nothing :: Maybe String)
 
 ------------------------------------------------------------------------------
 -- Semantic-ui templates.
@@ -225,11 +225,7 @@ eventWithTarget :: (DOM.IsEvent (EventType en), DOM.IsElement e, DOM.IsGObject t
   -> EventM e (EventType en) (Maybe (t, (EventResultType en)))
 eventWithTarget e en = do
 -- TODO: is this really necessary?
-#ifdef ghcjs_HOST_OS
   Just t <- target
-#else
-  t <- target
-#endif
   mr <- fmap unEventResult <$> defaultDomEventHandler e en
   return $ (,) <$> Just t <*> mr
 
